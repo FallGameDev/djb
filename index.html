@@ -29,9 +29,9 @@ button {
   font-weight: bold;
 }
 
-#fileMenu {
-  position: relative;
-}
+input { font-family: monospace; }
+
+#fileMenu { position: relative; }
 
 #dropdown {
   display: none;
@@ -48,9 +48,7 @@ button {
   cursor: pointer;
 }
 
-#dropdown div:hover {
-  background: #444;
-}
+#dropdown div:hover { background: #444; }
 
 #projectName {
   padding: 6px;
@@ -99,6 +97,12 @@ button {
 .center { justify-content: center; }
 .right { justify-content: flex-end; }
 
+.containerBox {
+  border: 1px dashed #999;
+  padding: 10px;
+  margin: 10px 0;
+}
+
 img { max-width: 100%; }
 </style>
 </head>
@@ -110,17 +114,16 @@ img { max-width: 100%; }
 <button onclick="runCode()">Reload</button>
 
 <div id="fileMenu">
-<button onclick="toggleDropdown()">File 💾</button>
+<button onclick="toggleDropdown(event)">File 💾</button>
 <div id="dropdown">
 <div onclick="saveProject()">Save</div>
 <div onclick="loadProject()">Load</div>
-<div onclick="exportExternal()">External</div>
 </div>
 </div>
 
 <input id="projectName" placeholder="project name">
 
-<button onclick="toggleRules()">Rules 📖</button>
+<button id="rulesBtn">Rules 📖</button>
 
 </div>
 
@@ -139,10 +142,16 @@ img { max-width: 100%; }
 <p>tri(w,h,align,stroke,color)</p>
 
 <h3>Button</h3>
-<p>button("text", ratio, radius, color, textColor, align)</p>
+<p>button("text", ratio, cornerRadius, color, textColor, align)</p>
 
 <h3>Image</h3>
 <p>image(align, url, alt)</p>
+
+<h3>Input</h3>
+<p>edit("placeholder", align, width, height)</p>
+
+<h3>Containers</h3>
+<p>{ ... }</p>
 
 </div>
 
@@ -161,13 +170,18 @@ const fileInput = document.getElementById("fileInput");
 const projectName = document.getElementById("projectName");
 const dropdown = document.getElementById("dropdown");
 const rulesPanel = document.getElementById("rulesPanel");
+const rulesBtn = document.getElementById("rulesBtn");
 
-function toggleDropdown(){
-  dropdown.style.display = dropdown.style.display==="block"?"none":"block";
-}
+rulesBtn.onclick = (e) => {
+  e.stopPropagation();
+  rulesPanel.style.display =
+    rulesPanel.style.display === "block" ? "none" : "block";
+};
 
-function toggleRules(){
-  rulesPanel.style.display = rulesPanel.style.display==="block"?"none":"block";
+function toggleDropdown(e){
+  e.stopPropagation();
+  dropdown.style.display =
+    dropdown.style.display==="block"?"none":"block";
 }
 
 function wrap(align){
@@ -188,10 +202,29 @@ function runCode(){
 
   const lines=editor.value.split("\n");
 
+  let stack = [preview]; // container stack
+
   lines.forEach(line=>{
     line=line.trim();
     if(!line) return;
 
+    // START CONTAINER
+    if(line === "{"){
+      const div=document.createElement("div");
+      div.className="containerBox";
+
+      stack[stack.length-1].appendChild(div);
+      stack.push(div);
+      return;
+    }
+
+    // END CONTAINER
+    if(line === "}"){
+      if(stack.length > 1) stack.pop();
+      return;
+    }
+
+    let parent = stack[stack.length-1];
     let m;
 
     // TEXT
@@ -203,7 +236,20 @@ function runCode(){
       el.style.color=m[3];
       el.style.fontSize=m[4]+"px";
       w.appendChild(el);
-      preview.appendChild(w);
+      parent.appendChild(w);
+      return;
+    }
+
+    // EDIT
+    m=line.match(/edit\("(.+?)",\s*(\w+),\s*(\d+),\s*(\d+)\);/);
+    if(m){
+      const w=wrap(m[2]);
+      const inp=document.createElement("input");
+      inp.placeholder=m[1];
+      inp.style.width=m[3]+"px";
+      inp.style.height=m[4]+"px";
+      w.appendChild(inp);
+      parent.appendChild(w);
       return;
     }
 
@@ -217,37 +263,7 @@ function runCode(){
       d.style.background=m[5];
       d.style.border="2px solid "+m[4];
       w.appendChild(d);
-      preview.appendChild(w);
-      return;
-    }
-
-    // ELLIPSE
-    m=line.match(/ellipse\((\d+),\s*(\d+),\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\);/);
-    if(m){
-      const w=wrap(m[3]);
-      const d=document.createElement("div");
-      d.style.width=m[1]+"px";
-      d.style.height=m[2]+"px";
-      d.style.background=m[5];
-      d.style.border="2px solid "+m[4];
-      d.style.borderRadius="50%";
-      w.appendChild(d);
-      preview.appendChild(w);
-      return;
-    }
-
-    // TRI
-    m=line.match(/tri\((\d+),\s*(\d+),\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\);/);
-    if(m){
-      const w=wrap(m[3]);
-      const d=document.createElement("div");
-      d.style.width=0;
-      d.style.height=0;
-      d.style.borderLeft=(m[1]/2)+"px solid transparent";
-      d.style.borderRight=(m[1]/2)+"px solid transparent";
-      d.style.borderBottom=m[2]+"px solid "+m[5];
-      w.appendChild(d);
-      preview.appendChild(w);
+      parent.appendChild(w);
       return;
     }
 
@@ -256,15 +272,16 @@ function runCode(){
     if(m){
       const w=wrap(m[6]);
       const b=document.createElement("button");
+      const ratio=parseInt(m[2]);
       b.textContent=m[1];
-      b.style.width=(m[2]*100)+"px";
-      b.style.height=(m[2]*40)+"px";
+      b.style.width=(ratio*120)+"px";
+      b.style.height=(ratio*40)+"px";
       b.style.borderRadius=m[3]+"px";
       b.style.background=m[4];
       b.style.color=m[5];
       b.style.border="2px solid "+dark(m[4]);
       w.appendChild(b);
-      preview.appendChild(w);
+      parent.appendChild(w);
       return;
     }
 
@@ -276,18 +293,17 @@ function runCode(){
       img.src=m[2];
       img.alt=m[3]||"";
       w.appendChild(img);
-      preview.appendChild(w);
+      parent.appendChild(w);
       return;
     }
 
     const err=document.createElement("div");
     err.textContent="Syntax error: "+line;
     err.style.color="red";
-    preview.appendChild(err);
+    parent.appendChild(err);
   });
 }
 
-// FILE SYSTEM
 function saveProject(){
   const name=projectName.value||"project";
   const blob=new Blob([editor.value]);
@@ -297,9 +313,7 @@ function saveProject(){
   a.click();
 }
 
-function loadProject(){
-  fileInput.click();
-}
+function loadProject(){ fileInput.click(); }
 
 fileInput.onchange=e=>{
   const f=e.target.files[0];
@@ -309,106 +323,11 @@ fileInput.onchange=e=>{
   r.readAsText(f);
 };
 
-// EXPORT FULL HTML
-function exportExternal(){
-  const name=projectName.value||"project";
-  const code=editor.value;
-
-  const html=`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>${name}</title>
-<style>
-body{font-family:monospace;margin:0;padding:10px;}
-.row{display:flex;margin:10px 0;}
-.left{justify-content:flex-start;}
-.center{justify-content:center;}
-.right{justify-content:flex-end;}
-</style>
-</head>
-<body>
-<div id="c"></div>
-
-<script>
-const code=\`${code.replace(/`/g,"\\`")}\`;
-const c=document.getElementById("c");
-
-function dark(hex){
-let r=parseInt(hex.slice(1,3),16)*0.7;
-let g=parseInt(hex.slice(3,5),16)*0.7;
-let b=parseInt(hex.slice(5,7),16)*0.7;
-return "#"+[r,g,b].map(v=>Math.floor(v).toString(16).padStart(2,"0")).join("");
-}
-
-function wrap(a){
-const d=document.createElement("div");
-d.className="row "+a;
-return d;
-}
-
-code.split("\\n").forEach(line=>{
-line=line.trim();
-if(!line) return;
-
-let m;
-
-// TEXT
-m=line.match(/text\\("(.+?)",\\s*(\\w+),\\s*(#[0-9a-fA-F]{6}),\\s*(\\d+)\\);/);
-if(m){
-const w=wrap(m[2]);
-const el=document.createElement("div");
-el.textContent=m[1];
-el.style.color=m[3];
-el.style.fontSize=m[4]+"px";
-w.appendChild(el);
-c.appendChild(w);
-return;
-}
-
-// RECT
-m=line.match(/rect\\((\\d+),\\s*(\\d+),\\s*(\\w+),\\s*(#[0-9a-fA-F]{6}),\\s*(#[0-9a-fA-F]{6})\\);/);
-if(m){
-const w=wrap(m[3]);
-const d=document.createElement("div");
-d.style.width=m[1]+"px";
-d.style.height=m[2]+"px";
-d.style.background=m[5];
-d.style.border="2px solid "+m[4];
-w.appendChild(d);
-c.appendChild(w);
-return;
-}
-
-// IMAGE
-m=line.match(/image\\((\\w+),\\s*(https?:\\/\\/\\S+)(?:,\\s*(.+))?\\);/);
-if(m){
-const w=wrap(m[1]);
-const img=document.createElement("img");
-img.src=m[2];
-w.appendChild(img);
-c.appendChild(w);
-return;
-}
-
-});
-<\/script>
-</body>
-</html>
-`;
-
-  const b=new Blob([html],{type:"text/html"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(b);
-  a.download=name+".html";
-  a.click();
-}
-
-// UI
 window.onclick=e=>{
 if(!e.target.closest("#fileMenu")) dropdown.style.display="none";
-if(!e.target.closest("#rulesPanel")) rulesPanel.style.display="none";
+if(!e.target.closest("#rulesPanel") && !e.target.closest("#rulesBtn")){
+  rulesPanel.style.display="none";
+}
 };
 
 </script>
