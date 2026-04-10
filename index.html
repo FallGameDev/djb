@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DJB Playground</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: monospace;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#topbar {
+  background: #222;
+  padding: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+button {
+  background: #00ff9c;
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+#fileMenu {
+  position: relative;
+}
+
+#dropdown {
+  display: none;
+  position: absolute;
+  top: 35px;
+  left: 0;
+  background: #333;
+  min-width: 140px;
+}
+
+#dropdown div {
+  padding: 8px;
+  color: white;
+  cursor: pointer;
+}
+
+#dropdown div:hover {
+  background: #444;
+}
+
+#projectName {
+  padding: 6px;
+  width: 180px;
+}
+
+#rulesPanel {
+  display: none;
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  width: 400px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #111;
+  color: white;
+  border: 1px solid #333;
+  padding: 12px;
+  z-index: 1000;
+}
+
+#container {
+  display: flex;
+  flex: 1;
+}
+
+#editor {
+  width: 50%;
+  background: #1e1e1e;
+  color: #00ff9c;
+  border: none;
+  padding: 10px;
+  outline: none;
+  resize: none;
+}
+
+#preview {
+  width: 50%;
+  background: white;
+  overflow: auto;
+  padding: 10px;
+}
+
+.row { display: flex; margin: 8px 0; }
+.left { justify-content: flex-start; }
+.center { justify-content: center; }
+.right { justify-content: flex-end; }
+
+img { max-width: 100%; }
+</style>
+</head>
+
+<body>
+
+<div id="topbar">
+
+<button onclick="runCode()">Reload</button>
+
+<div id="fileMenu">
+<button onclick="toggleDropdown()">File 💾</button>
+<div id="dropdown">
+<div onclick="saveProject()">Save</div>
+<div onclick="loadProject()">Load</div>
+<div onclick="exportExternal()">External</div>
+</div>
+</div>
+
+<input id="projectName" placeholder="project name">
+
+<button onclick="toggleRules()">Rules 📖</button>
+
+</div>
+
+<div id="rulesPanel">
+<h2>DJB Rules</h2>
+
+<h3>Text</h3>
+<p>text("msg", align, color, size)</p>
+
+<h3>Background</h3>
+<p>bg(#color, y)</p>
+
+<h3>Shapes</h3>
+<p>rect(w,h,align,stroke,color)</p>
+<p>ellipse(w,h,align,stroke,color)</p>
+<p>tri(w,h,align,stroke,color)</p>
+
+<h3>Button</h3>
+<p>button("text", ratio, radius, color, textColor, align)</p>
+
+<h3>Image</h3>
+<p>image(align, url, alt)</p>
+
+</div>
+
+<div id="container">
+<textarea id="editor"></textarea>
+<div id="preview"></div>
+</div>
+
+<input type="file" id="fileInput" accept=".djb" style="display:none">
+
+<script>
+
+const editor = document.getElementById("editor");
+const preview = document.getElementById("preview");
+const fileInput = document.getElementById("fileInput");
+const projectName = document.getElementById("projectName");
+const dropdown = document.getElementById("dropdown");
+const rulesPanel = document.getElementById("rulesPanel");
+
+function toggleDropdown(){
+  dropdown.style.display = dropdown.style.display==="block"?"none":"block";
+}
+
+function toggleRules(){
+  rulesPanel.style.display = rulesPanel.style.display==="block"?"none":"block";
+}
+
+function wrap(align){
+  const d=document.createElement("div");
+  d.className="row "+align;
+  return d;
+}
+
+function dark(hex){
+  let r=parseInt(hex.slice(1,3),16)*0.7;
+  let g=parseInt(hex.slice(3,5),16)*0.7;
+  let b=parseInt(hex.slice(5,7),16)*0.7;
+  return "#"+[r,g,b].map(v=>Math.floor(v).toString(16).padStart(2,"0")).join("");
+}
+
+function runCode(){
+  preview.innerHTML="";
+
+  const lines=editor.value.split("\n");
+
+  lines.forEach(line=>{
+    line=line.trim();
+    if(!line) return;
+
+    let m;
+
+    // TEXT
+    m=line.match(/text\("(.+?)",\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(\d+)\);/);
+    if(m){
+      const w=wrap(m[2]);
+      const el=document.createElement("div");
+      el.textContent=m[1];
+      el.style.color=m[3];
+      el.style.fontSize=m[4]+"px";
+      w.appendChild(el);
+      preview.appendChild(w);
+      return;
+    }
+
+    // RECT
+    m=line.match(/rect\((\d+),\s*(\d+),\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\);/);
+    if(m){
+      const w=wrap(m[3]);
+      const d=document.createElement("div");
+      d.style.width=m[1]+"px";
+      d.style.height=m[2]+"px";
+      d.style.background=m[5];
+      d.style.border="2px solid "+m[4];
+      w.appendChild(d);
+      preview.appendChild(w);
+      return;
+    }
+
+    // ELLIPSE
+    m=line.match(/ellipse\((\d+),\s*(\d+),\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\);/);
+    if(m){
+      const w=wrap(m[3]);
+      const d=document.createElement("div");
+      d.style.width=m[1]+"px";
+      d.style.height=m[2]+"px";
+      d.style.background=m[5];
+      d.style.border="2px solid "+m[4];
+      d.style.borderRadius="50%";
+      w.appendChild(d);
+      preview.appendChild(w);
+      return;
+    }
+
+    // TRI
+    m=line.match(/tri\((\d+),\s*(\d+),\s*(\w+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\);/);
+    if(m){
+      const w=wrap(m[3]);
+      const d=document.createElement("div");
+      d.style.width=0;
+      d.style.height=0;
+      d.style.borderLeft=(m[1]/2)+"px solid transparent";
+      d.style.borderRight=(m[1]/2)+"px solid transparent";
+      d.style.borderBottom=m[2]+"px solid "+m[5];
+      w.appendChild(d);
+      preview.appendChild(w);
+      return;
+    }
+
+    // BUTTON
+    m=line.match(/button\("(.+?)",\s*(\d+),\s*(\d+),\s*(#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6}),\s*(\w+)\);/);
+    if(m){
+      const w=wrap(m[6]);
+      const b=document.createElement("button");
+      b.textContent=m[1];
+      b.style.width=(m[2]*100)+"px";
+      b.style.height=(m[2]*40)+"px";
+      b.style.borderRadius=m[3]+"px";
+      b.style.background=m[4];
+      b.style.color=m[5];
+      b.style.border="2px solid "+dark(m[4]);
+      w.appendChild(b);
+      preview.appendChild(w);
+      return;
+    }
+
+    // IMAGE
+    m=line.match(/image\((\w+),\s*(https?:\/\/\S+)(?:,\s*(.+))?\);/);
+    if(m){
+      const w=wrap(m[1]);
+      const img=document.createElement("img");
+      img.src=m[2];
+      img.alt=m[3]||"";
+      w.appendChild(img);
+      preview.appendChild(w);
+      return;
+    }
+
+    const err=document.createElement("div");
+    err.textContent="Syntax error: "+line;
+    err.style.color="red";
+    preview.appendChild(err);
+  });
+}
+
+// FILE SYSTEM
+function saveProject(){
+  const name=projectName.value||"project";
+  const blob=new Blob([editor.value]);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=name+".djb";
+  a.click();
+}
+
+function loadProject(){
+  fileInput.click();
+}
+
+fileInput.onchange=e=>{
+  const f=e.target.files[0];
+  if(!f.name.endsWith(".djb")) return alert("Only .djb");
+  const r=new FileReader();
+  r.onload=ev=>editor.value=ev.target.result;
+  r.readAsText(f);
+};
+
+// EXPORT FULL HTML
+function exportExternal(){
+  const name=projectName.value||"project";
+  const code=editor.value;
+
+  const html=`
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>${name}</title>
+<style>
+body{font-family:monospace;margin:0;padding:10px;}
+.row{display:flex;margin:10px 0;}
+.left{justify-content:flex-start;}
+.center{justify-content:center;}
+.right{justify-content:flex-end;}
+</style>
+</head>
+<body>
+<div id="c"></div>
+
+<script>
+const code=\`${code.replace(/`/g,"\\`")}\`;
+const c=document.getElementById("c");
+
+function dark(hex){
+let r=parseInt(hex.slice(1,3),16)*0.7;
+let g=parseInt(hex.slice(3,5),16)*0.7;
+let b=parseInt(hex.slice(5,7),16)*0.7;
+return "#"+[r,g,b].map(v=>Math.floor(v).toString(16).padStart(2,"0")).join("");
+}
+
+function wrap(a){
+const d=document.createElement("div");
+d.className="row "+a;
+return d;
+}
+
+code.split("\\n").forEach(line=>{
+line=line.trim();
+if(!line) return;
+
+let m;
+
+// TEXT
+m=line.match(/text\\("(.+?)",\\s*(\\w+),\\s*(#[0-9a-fA-F]{6}),\\s*(\\d+)\\);/);
+if(m){
+const w=wrap(m[2]);
+const el=document.createElement("div");
+el.textContent=m[1];
+el.style.color=m[3];
+el.style.fontSize=m[4]+"px";
+w.appendChild(el);
+c.appendChild(w);
+return;
+}
+
+// RECT
+m=line.match(/rect\\((\\d+),\\s*(\\d+),\\s*(\\w+),\\s*(#[0-9a-fA-F]{6}),\\s*(#[0-9a-fA-F]{6})\\);/);
+if(m){
+const w=wrap(m[3]);
+const d=document.createElement("div");
+d.style.width=m[1]+"px";
+d.style.height=m[2]+"px";
+d.style.background=m[5];
+d.style.border="2px solid "+m[4];
+w.appendChild(d);
+c.appendChild(w);
+return;
+}
+
+// IMAGE
+m=line.match(/image\\((\\w+),\\s*(https?:\\/\\/\\S+)(?:,\\s*(.+))?\\);/);
+if(m){
+const w=wrap(m[1]);
+const img=document.createElement("img");
+img.src=m[2];
+w.appendChild(img);
+c.appendChild(w);
+return;
+}
+
+});
+<\/script>
+</body>
+</html>
+`;
+
+  const b=new Blob([html],{type:"text/html"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b);
+  a.download=name+".html";
+  a.click();
+}
+
+// UI
+window.onclick=e=>{
+if(!e.target.closest("#fileMenu")) dropdown.style.display="none";
+if(!e.target.closest("#rulesPanel")) rulesPanel.style.display="none";
+};
+
+</script>
+
+</body>
+</html>
